@@ -1,0 +1,243 @@
+
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Emergency</title>
+<style>
+/* Full screen dark background */
+body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: Arial, sans-serif;
+    background: #000;
+    color: #ff1a1a;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Main content area */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding-bottom: 80px; /* footer space */
+}
+
+/* Circular Help Button */
+#help-btn {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    background-color: black;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 28px;
+    color: #ff1a1a;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 0 20px #ff1a1a;
+    transition: transform 0.4s, box-shadow 0.4s, opacity 0.8s;
+    z-index: 2;
+}
+
+#help-btn:hover {
+    transform: scale(1.15) rotate(5deg);
+    box-shadow: 0 0 40px #ff3333, 0 0 60px #ff0000;
+}
+
+/* Container for hospital cards */
+.container {
+    width: 90%;
+    max-width: 900px;
+    margin-top: 30px;
+    text-align: center;
+}
+
+/* Hospital Cards */
+.hospital {
+    background: #220000;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 10px rgba(255,0,0,0.3);
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.hospital:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 4px 20px rgba(255,0,0,0.6);
+}
+
+.hospital h3 { margin: 0 0 5px 0; color: #ff1a1a; }
+.hospital p { margin: 3px 0; }
+.hospital a { color: #ff4d4d; text-decoration: none; font-weight: bold; }
+.hospital a:hover { text-decoration: underline; }
+.distance { font-style: italic; color: #ff6666; }
+
+/* Refresh button inside container */
+#refresh-btn {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+    background: #cc0000;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    display: none;
+    transition: background 0.3s, transform 0.2s;
+    margin: 15px 0;
+}
+
+#refresh-btn:hover {
+    background: #ff1a1a;
+    transform: scale(1.05);
+}
+
+/* Footer */
+footer {
+    width: 100%;
+    text-align: center;
+    padding: 10px 0;
+    background: #000;
+    color: #ff1a1a;
+    font-size: 14px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+}
+
+/* Smooth fade-out animation for Help button */
+.fade-out {
+    opacity: 0;
+    transform: scale(0.5);
+    transition: transform 0.5s, opacity 0.5s;
+}
+</style>
+</head>
+<body>
+
+<div class="main-content">
+    <button id="help-btn">Help</button>
+    <div class="container" id="hospital-list"></div>
+    <button id="refresh-btn" onclick="reloadData()">Refresh</button>
+</div>
+
+<footer><a href="https://github.com/HumayunShariarHimu">Humayun Shariar Himu</a></footer>
+
+<script>
+// সরকারি সার্জন/ফোন লিঙ্ক উদাহরণ
+function getDoctorLink(hospitalName){
+    return `https://www.google.com/search?q=${encodeURIComponent(hospitalName + " সরকারি সার্জন ফোন")}`;
+}
+
+const helpBtn = document.getElementById("help-btn");
+const refreshBtn = document.getElementById("refresh-btn");
+
+helpBtn.addEventListener("click", () => {
+    helpBtn.disabled = true;
+    helpBtn.style.cursor = "not-allowed";
+    helpBtn.innerText = "Loading...";
+    getLocation();
+});
+
+function reloadData(){
+    document.getElementById("hospital-list").innerHTML = "";
+    helpBtn.style.opacity = 1;
+    helpBtn.style.transform = "scale(1)";
+    helpBtn.disabled = false;
+    helpBtn.style.cursor = "pointer";
+    helpBtn.innerText = "Help";
+    refreshBtn.style.display = "none";
+}
+
+function getLocation() {
+    if(navigator.geolocation){
+        navigator.geolocation.getCurrentPosition(fetchHospitals, showError);
+    } else {
+        alert("আপনার ব্রাউজার GPS সাপোর্ট করছে না।");
+    }
+}
+
+function fetchHospitals(position){
+    const lat = position.coords.latitude;
+    const lon = position.coords.longitude;
+
+    const query = `
+        [out:json];
+        (
+          node["amenity"="hospital"](around:10000,${lat},${lon});
+          way["amenity"="hospital"](around:10000,${lat},${lon});
+          relation["amenity"="hospital"](around:10000,${lat},${lon});
+        );
+        out center;
+    `;
+    const url = "https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(query);
+
+    fetch(url)
+        .then(res => res.json())
+        .then(data => displayHospitals(data.elements, lat, lon))
+        .catch(err => {
+            console.error(err);
+            alert("হসপিটাল তথ্য লোড করতে সমস্যা হয়েছে।");
+        });
+}
+
+function displayHospitals(elements, userLat, userLon){
+    const list = document.getElementById("hospital-list");
+    list.innerHTML = "";
+
+    if(elements.length === 0){
+        list.innerHTML = "<p>নিকটস্থ সরকারি হাসপাতাল পাওয়া যায়নি।</p>";
+        helpBtn.style.opacity = 1;
+        return;
+    }
+
+    // Fade out Help button smoothly
+    helpBtn.classList.add("fade-out");
+
+    refreshBtn.style.display = "block";
+
+    elements.forEach(hospital => {
+        const hLat = hospital.lat || hospital.center.lat;
+        const hLon = hospital.lon || hospital.center.lon;
+        const distance = getDistance(userLat, userLon, hLat, hLon).toFixed(2);
+        const name = hospital.tags.name || "অজানা হাসপাতাল";
+
+        const div = document.createElement("div");
+        div.className = "hospital";
+        div.innerHTML = `
+            <h3>${name}</h3>
+            <p class="distance">দূরত্ব: ${distance} কিমি</p>
+            <p>সার্জন/ডাক্তার: <a href="${getDoctorLink(name)}" target="_blank">লিংক দেখুন</a></p>
+        `;
+        list.appendChild(div);
+    });
+}
+
+// Haversine formula
+function getDistance(lat1, lon1, lat2, lon2){
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI/180;
+    const dLon = (lon2 - lon1) * Math.PI/180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+    const c = 2*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R*c;
+}
+
+function showError(error){
+    switch(error.code){
+        case error.PERMISSION_DENIED: alert("GPS অনুমতি দেওয়া হয়নি।"); break;
+        case error.POSITION_UNAVAILABLE: alert("লোকেশন পাওয়া যায়নি।"); break;
+        case error.TIMEOUT: alert("লোকেশন রিকোয়েস্ট টাইম আউট।"); break;
+        default: alert("অজানা ত্রুটি ঘটেছে।"); break;
+    }
+}
+</script>
+</body>
+</html>
